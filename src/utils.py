@@ -4,10 +4,10 @@ import os
 import platform
 import re
 import shutil
-import sys
 import tempfile
 import urllib.parse
 
+from dotenv import load_dotenv
 from selenium.webdriver.chrome.webdriver import WebDriver
 import undetected_chromedriver as uc
 
@@ -18,6 +18,8 @@ CHROME_MAJOR_VERSION = None
 USER_AGENT = None
 XVFB_DISPLAY = None
 PATCHED_DRIVER_PATH = None
+
+load_dotenv()
 
 
 def get_config_log_html() -> bool:
@@ -39,6 +41,7 @@ def get_flaresolverr_version() -> str:
     with open(package_path) as f:
         FLARESOLVERR_VERSION = json.loads(f.read())['version']
         return FLARESOLVERR_VERSION
+
 
 def get_current_platform() -> str:
     global PLATFORM_VERSION
@@ -135,19 +138,19 @@ def get_webdriver(proxy: dict = None) -> WebDriver:
     options.add_argument('--disable-setuid-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     # this option removes the zygote sandbox (it seems that the resolution is a bit faster)
-    options.add_argument('--no-zygote')
+    # options.add_argument('--no-zygote')
     # attempt to fix Docker ARM32 build
     IS_ARMARCH = platform.machine().startswith(('arm', 'aarch'))
-    if IS_ARMARCH:
-        options.add_argument('--disable-gpu-sandbox')
-        options.add_argument('--disable-software-rasterizer')
-    options.add_argument('--ignore-certificate-errors')
-    options.add_argument('--ignore-ssl-errors')
+    # if IS_ARMARCH:
+        # options.add_argument('--disable-gpu-sandbox')
+        # options.add_argument('--disable-software-rasterizer')
+    # options.add_argument('--ignore-certificate-errors')
+    # options.add_argument('--ignore-ssl-errors')
     # fix GL errors in ASUSTOR NAS
     # https://github.com/FlareSolverr/FlareSolverr/issues/782
     # https://github.com/microsoft/vscode/issues/127800#issuecomment-873342069
     # https://peter.sh/experiments/chromium-command-line-switches/#use-gl
-    options.add_argument('--use-gl=swiftshader')
+    # options.add_argument('--use-gl=swiftshader')
 
     language = os.environ.get('LANG', None)
     if language is not None:
@@ -177,7 +180,8 @@ def get_webdriver(proxy: dict = None) -> WebDriver:
     # For normal headless mode:
     # options.add_argument('--headless')
 
-    options.add_argument("--auto-open-devtools-for-tabs")
+    # options.add_argument("--auto-open-devtools-for-tabs")
+    options.add_argument("--disable-popup-blocking")
 
     # if we are inside the Docker container, we avoid downloading the driver
     driver_exe_path = None

@@ -41,7 +41,8 @@ CHALLENGE_TITLES = [
 ]
 CHALLENGE_SELECTORS = [
     # Cloudflare
-    '#cf-challenge-running', '.ray_id', '.attack-box', '#cf-please-wait', '#challenge-spinner', '#trk_jschal_js', '#turnstile-wrapper', '.lds-ring',
+    '#cf-challenge-running', '.ray_id', '.attack-box', '#cf-please-wait', '#challenge-spinner', '#trk_jschal_js',
+    '#turnstile-wrapper', '.lds-ring',
     # Custom CloudFlare for EbookParadijs, Film-Paleis, MuziekFabriek and Puur-Hollands
     'td.info #js_info',
     # Fairlane / pararius.com
@@ -252,32 +253,44 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
             logging.debug('A used instance of webdriver has been destroyed')
 
 
-def click_verify(driver: WebDriver):
+def find_element_by_xpath(driver, xpath):
     try:
-        logging.debug("Try to find the Cloudflare verify checkbox...")
-        iframe = driver.find_element(By.XPATH, "//iframe[starts-with(@id, 'cf-chl-widget-')]")
+        # element = WebDriverWait(driver, 1).until(presence_of_element_located((By.XPATH, xpath)))
+        # Avoid expect to save time
+        element = driver.find_elements(By.XPATH, xpath)
+        return element
+    except:
+        logging.debug(f"Element with xpath {xpath}, not found!")
+        return None
+
+
+def click_verify(driver: WebDriver):
+    logging.debug("Try to find the Cloudflare iframe...")
+    iframe = find_element_by_xpath(driver, "//iframe[starts-with(@id, 'cf-chl-widget-')]")
+    if not iframe:
+        iframe = find_element_by_xpath(driver, "//iframe[normalize-space(@id)]")
+    if iframe:
         driver.switch_to.frame(iframe)
-        checkbox = driver.find_element(
-            by=By.XPATH,
-            value='//*[@id="content"]/div/div/label/input',
-        )
+        logging.debug("Try to find the Cloudflare verify checkbox...")
+        checkbox = find_element_by_xpath(driver, '//*[@id="content"]/div/div/label/input')
+        if not checkbox:
+            checkbox = find_element_by_xpath(driver, '//*[@id="challenge-stage"]/div/label/input')
+        if not checkbox:
+            checkbox = find_element_by_xpath(driver, '//*[normalize-space(@id)]/div/label/input')
         if checkbox:
             actions = ActionChains(driver)
             actions.move_to_element_with_offset(checkbox, 5, 7)
             actions.click(checkbox)
             actions.perform()
             logging.debug("Cloudflare verify checkbox found and clicked!")
-    except Exception:
-        logging.debug("Cloudflare verify checkbox not found on the page.")
-    finally:
-        driver.switch_to.default_content()
+    driver.switch_to.default_content()
 
     try:
         logging.debug("Try to find the Cloudflare 'Verify you are human' button...")
-        button = driver.find_element(
-            by=By.XPATH,
-            value="//input[@type='button' and @value='Verify you are human']",
-        )
+        button = find_element_by_xpath(driver, "//input[@type='button' and @value='Verify you are human']")
+        if not button:
+            button = find_element_by_xpath(driver,
+                                           "//input[@type='button' and @value='Vérifiez que vous êtes humain']")  # in French
         if button:
             actions = ActionChains(driver)
             actions.move_to_element_with_offset(button, 5, 7)
@@ -292,7 +305,7 @@ def click_verify(driver: WebDriver):
 
 def get_correct_window(driver: WebDriver) -> WebDriver:
     if len(driver.window_handles) > 1:
-        for window_handle in driver.window_handles:
+        for window_handle in reversed(driver.window_handles):
             driver.switch_to.window(window_handle)
             current_url = driver.current_url
             if not current_url.startswith("devtools://devtools"):
@@ -306,11 +319,18 @@ def access_page(driver: WebDriver, url: str) -> None:
     driver.start_session()  # required to bypass Cloudflare
 
 
+def switch_to_new_tab(driver: WebDriver, url: str) -> None:
+    logging.debug("Opening new tab...")
+    driver.execute_script(f"window.open('{url}', 'new tab')")
+    time.sleep(2)
+    logging.debug("Closing original tab...")
+    time.sleep(2)
+
+
 def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> ChallengeResolutionT:
     res = ChallengeResolutionT({})
     res.status = STATUS_OK
     res.message = ""
-
 
     # navigate to the page
     logging.debug(f'Navigating to... {req.url}')
@@ -372,6 +392,11 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         while True:
             try:
                 attempt = attempt + 1
+                if attempt == 4:
+                    switch_to_new_tab(driver, req.url)
+                    driver = get_correct_window(driver)
+                    time.sleep(4)
+
                 # wait until the title changes
                 for title in CHALLENGE_TITLES:
                     logging.debug("Waiting for title (attempt " + str(attempt) + "): " + title)

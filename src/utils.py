@@ -7,7 +7,6 @@ import shutil
 import tempfile
 import urllib.parse
 
-from dotenv import load_dotenv
 from selenium.webdriver.chrome.webdriver import WebDriver
 import undetected_chromedriver as uc
 
@@ -18,8 +17,6 @@ CHROME_MAJOR_VERSION = None
 USER_AGENT = None
 XVFB_DISPLAY = None
 PATCHED_DRIVER_PATH = None
-
-load_dotenv()
 
 
 def get_config_log_html() -> bool:
@@ -142,8 +139,8 @@ def get_webdriver(proxy: dict = None) -> WebDriver:
     # attempt to fix Docker ARM32 build
     IS_ARMARCH = platform.machine().startswith(('arm', 'aarch'))
     # if IS_ARMARCH:
-        # options.add_argument('--disable-gpu-sandbox')
-        # options.add_argument('--disable-software-rasterizer')
+    # options.add_argument('--disable-gpu-sandbox')
+    # options.add_argument('--disable-software-rasterizer')
     # options.add_argument('--ignore-certificate-errors')
     # options.add_argument('--ignore-ssl-errors')
     # fix GL errors in ASUSTOR NAS

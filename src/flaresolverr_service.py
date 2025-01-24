@@ -253,44 +253,25 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
             logging.debug('A used instance of webdriver has been destroyed')
 
 
-def find_element_by_xpath(driver, xpath):
-    try:
-        # element = WebDriverWait(driver, 1).until(presence_of_element_located((By.XPATH, xpath)))
-        # Avoid expect to save time
-        element = driver.find_elements(By.XPATH, xpath)
-        return element
-    except:
-        logging.debug(f"Element with xpath {xpath}, not found!")
-        return None
-
-
 def click_verify(driver: WebDriver):
-    logging.debug("Try to find the Cloudflare iframe...")
-    iframe = find_element_by_xpath(driver, "//iframe[starts-with(@id, 'cf-chl-widget-')]")
-    if not iframe:
-        iframe = find_element_by_xpath(driver, "//iframe[normalize-space(@id)]")
-    if iframe:
-        driver.switch_to.frame(iframe)
-        logging.debug("Try to find the Cloudflare verify checkbox...")
-        checkbox = find_element_by_xpath(driver, '//*[@id="content"]/div/div/label/input')
-        if not checkbox:
-            checkbox = find_element_by_xpath(driver, '//*[@id="challenge-stage"]/div/label/input')
-        if not checkbox:
-            checkbox = find_element_by_xpath(driver, '//*[normalize-space(@id)]/div/label/input')
-        if checkbox:
+    try:
+        logging.debug("Try to check the Cloudflare verify checkbox...")
+        turnstileDiv = driver.find_element(By.XPATH, "//*[@id='cf-turnstile']")
+        if turnstileDiv:
             actions = ActionChains(driver)
-            actions.move_to_element_with_offset(checkbox, 5, 7)
-            actions.click(checkbox)
+            actions.move_to_element_with_offset(turnstileDiv, 34, 38)
+            actions.click()
             actions.perform()
-            logging.debug("Cloudflare verify checkbox found and clicked!")
-    driver.switch_to.default_content()
+            logging.debug("Cloudflare verify checkbox click attempted!")
+    except Exception:
+        logging.debug("Cloudflare verify checkbox turnstile not found on the page.")
 
     try:
         logging.debug("Try to find the Cloudflare 'Verify you are human' button...")
-        button = find_element_by_xpath(driver, "//input[@type='button' and @value='Verify you are human']")
+        button = driver.find_element(driver, "//input[@type='button' and @value='Verify you are human']")
         if not button:
-            button = find_element_by_xpath(driver,
-                                           "//input[@type='button' and @value='Vérifiez que vous êtes humain']")  # in French
+            button = driver.find_element(driver,
+                                         "//input[@type='button' and @value='Vérifiez que vous êtes humain']")  # in French
         if button:
             actions = ActionChains(driver)
             actions.move_to_element_with_offset(button, 5, 7)
@@ -392,7 +373,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         while True:
             try:
                 attempt = attempt + 1
-                if attempt == 4:
+                if attempt == 5:
                     switch_to_new_tab(driver, req.url)
                     driver = get_correct_window(driver)
                     time.sleep(4)

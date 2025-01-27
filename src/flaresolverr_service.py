@@ -253,33 +253,76 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
             logging.debug('A used instance of webdriver has been destroyed')
 
 
+def find_element_by_xpath(driver, xpath):
+    try:
+        element = WebDriverWait(driver, 3).until(presence_of_element_located((By.XPATH, xpath)))
+        # Avoid expect to save time
+        # element = driver.find_elements(By.XPATH, xpath)
+        return element
+    except:
+        logging.debug(f"Element with xpath {xpath}, not found!")
+        return None
+
+
 def click_verify(driver: WebDriver):
     try:
-        logging.debug("Try to check the Cloudflare verify checkbox...")
-        turnstileDiv = driver.find_element(By.XPATH, "//*[@id='cf-turnstile']")
-        if turnstileDiv:
-            actions = ActionChains(driver)
-            actions.move_to_element_with_offset(turnstileDiv, 34, 38)
-            actions.click()
-            actions.perform()
-            logging.debug("Cloudflare verify checkbox click attempted!")
+        driver.execute_script("""
+            window.clickOffset = { offsetX: 0, offsetY: 0 };
+
+            document.addEventListener('click', function(event) {
+              var clickPosition = { x: event.clientX, y: event.clientY };
+
+              var pivotElement = document.querySelector("h1.zone-name-title.h1"); // Update this to your pivot element's ID
+              var rect  = pivotElement.getBoundingClientRect();
+
+              console.log('original pivot position: ',rect.x, rect.y);
+
+              window.clickOffset.offsetX = clickPosition.x - rect.x;
+              window.clickOffset.offsetY = clickPosition.y - rect.y;
+
+              console.log('Click Position: ', clickPosition);
+              console.log('Click Offset: ', window.clickOffset);
+            });
+          """)
+
+        # Find the pivot element (in this case, the label with a specific 'for' attribute)
+        pivot_element = driver.find_element(By.CSS_SELECTOR,
+                                            "h1.zone-name-title.h1")  # Update with your pivot element's CSS selector
+
+        # Get the location and size of the pivot element
+        location = pivot_element.location  # Get the position of the pivot element
+        size = pivot_element.size  # Get the size of the pivot element
+
+        logging.debug(f"pivot location {location}")
+
+        # Store the position of the element's center (or adjust as needed)
+        pivot_x = location['x'] + size['width'] / 2  # X coordinate of the center of the pivot element
+        pivot_y = location['y'] + size['height'] / 2  # Y coordinate of the center of the pivot element
+        logging.debug(f"calculated x,y: {pivot_x}, {pivot_y}")
+
+        # Here, we simulate a click offset (adjust these values based on your needs)
+        offset_x = 28  # The desired offset in the X direction
+        offset_y = 160  # The desired offset in the Y direction
+
+        # Create ActionChains object
+        actions = ActionChains(driver)
+
+        # Move to the pivot element (simulates moving the mouse to the pivot element)
+        actions.move_to_element(pivot_element)
+
+        # Move the mouse by the calculated offset (relative to the pivot element)
+        actions.move_by_offset(offset_x, offset_y)
+
+        # Perform the click
+        actions.click().perform()
+
+        logging.debug(f"Moved to position: ({pivot_x}, {pivot_y}) with offset: ({offset_x}, {offset_y})")
+
+        time.sleep(15)
+
+        logging.debug("Cloudflare verify checkbox click attempted!")
     except Exception:
         logging.debug("Cloudflare verify checkbox turnstile not found on the page.")
-
-    try:
-        logging.debug("Try to find the Cloudflare 'Verify you are human' button...")
-        button = driver.find_element(driver, "//input[@type='button' and @value='Verify you are human']")
-        if not button:
-            button = driver.find_element(driver,
-                                         "//input[@type='button' and @value='Vérifiez que vous êtes humain']")  # in French
-        if button:
-            actions = ActionChains(driver)
-            actions.move_to_element_with_offset(button, 5, 7)
-            actions.click(button)
-            actions.perform()
-            logging.debug("The Cloudflare 'Verify you are human' button found and clicked!")
-    except Exception:
-        logging.debug("The Cloudflare 'Verify you are human' button not found on the page.")
 
     time.sleep(2)
 
@@ -373,7 +416,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         while True:
             try:
                 attempt = attempt + 1
-                if attempt == 5:
+                if attempt % 2 == 0:
                     switch_to_new_tab(driver, req.url)
                     driver = get_correct_window(driver)
                     time.sleep(4)

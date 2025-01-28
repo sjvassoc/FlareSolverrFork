@@ -1,4 +1,4 @@
-#!/usr/bin/.env python3
+#!/usr/bin/env python3
 # this module is part of undetected_chromedriver
 
 import json

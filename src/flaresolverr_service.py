@@ -253,74 +253,41 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
             logging.debug('A used instance of webdriver has been destroyed')
 
 
-def find_element_by_xpath(driver, xpath):
-    try:
-        element = WebDriverWait(driver, 3).until(presence_of_element_located((By.XPATH, xpath)))
-        # Avoid expect to save time
-        # element = driver.find_elements(By.XPATH, xpath)
-        return element
-    except:
-        logging.debug(f"Element with xpath {xpath}, not found!")
-        return None
-
-
 def click_verify(driver: WebDriver):
     try:
-        driver.execute_script("""
-            window.clickOffset = { offsetX: 0, offsetY: 0 };
+        logging.debug("Try to check the Cloudflare verify checkbox...")
 
-            document.addEventListener('click', function(event) {
-              var clickPosition = { x: event.clientX, y: event.clientY };
+        # Find the pivot element (in this case, the header)
+        pivot_element = driver.find_element(By.CSS_SELECTOR, "h1.zone-name-title.h1")
 
-              var pivotElement = document.querySelector("h1.zone-name-title.h1"); // Update this to your pivot element's ID
-              var rect  = pivotElement.getBoundingClientRect();
+        if pivot_element:
+            # Get the position of the pivot element
+            location = pivot_element.location
+            logging.debug(f"Pivot element location {location}")
+            pivot_x = location['x']
+            pivot_y = location['y']
 
-              console.log('original pivot position: ',rect.x, rect.y);
+            # We adjust the click offset based on the pivot element
+            offset_x = -430
+            offset_y = 130
 
-              window.clickOffset.offsetX = clickPosition.x - rect.x;
-              window.clickOffset.offsetY = clickPosition.y - rect.y;
+            # Create ActionChains object
+            actions = ActionChains(driver)
 
-              console.log('Click Position: ', clickPosition);
-              console.log('Click Offset: ', window.clickOffset);
-            });
-          """)
+            # Move to the pivot element (simulates moving the mouse to the pivot element)
+            actions.move_to_element(pivot_element).pause(1).click().pause(1)
 
-        # Find the pivot element (in this case, the label with a specific 'for' attribute)
-        pivot_element = driver.find_element(By.CSS_SELECTOR,
-                                            "h1.zone-name-title.h1")  # Update with your pivot element's CSS selector
+            # Move the mouse by the calculated offset (relative to the pivot element)
+            actions.move_to_element_with_offset(pivot_element, offset_x, offset_y).pause(2)
 
-        # Get the location and size of the pivot element
-        location = pivot_element.location  # Get the position of the pivot element
-        size = pivot_element.size  # Get the size of the pivot element
+            # Perform the click
+            actions.click().perform()
 
-        logging.debug(f"pivot location {location}")
+            logging.debug(f"Moved to position: ({pivot_x}, {pivot_y}) with offset: ({offset_x}, {offset_y})")
 
-        # Store the position of the element's center (or adjust as needed)
-        pivot_x = location['x'] + size['width'] / 2  # X coordinate of the center of the pivot element
-        pivot_y = location['y'] + size['height'] / 2  # Y coordinate of the center of the pivot element
-        logging.debug(f"calculated x,y: {pivot_x}, {pivot_y}")
+            time.sleep(15)
 
-        # Here, we simulate a click offset (adjust these values based on your needs)
-        offset_x = 28  # The desired offset in the X direction
-        offset_y = 160  # The desired offset in the Y direction
-
-        # Create ActionChains object
-        actions = ActionChains(driver)
-
-        # Move to the pivot element (simulates moving the mouse to the pivot element)
-        actions.move_to_element(pivot_element)
-
-        # Move the mouse by the calculated offset (relative to the pivot element)
-        actions.move_by_offset(offset_x, offset_y)
-
-        # Perform the click
-        actions.click().perform()
-
-        logging.debug(f"Moved to position: ({pivot_x}, {pivot_y}) with offset: ({offset_x}, {offset_y})")
-
-        time.sleep(15)
-
-        logging.debug("Cloudflare verify checkbox click attempted!")
+            logging.debug("Cloudflare verify checkbox click attempted!")
     except Exception:
         logging.debug("Cloudflare verify checkbox turnstile not found on the page.")
 
@@ -329,11 +296,15 @@ def click_verify(driver: WebDriver):
 
 def get_correct_window(driver: WebDriver) -> WebDriver:
     if len(driver.window_handles) > 1:
+        window_to_keep = None
         for window_handle in reversed(driver.window_handles):
-            driver.switch_to.window(window_handle)
             current_url = driver.current_url
-            if not current_url.startswith("devtools://devtools"):
-                return driver
+            if not current_url.startswith("devtools://devtools") and not window_to_keep:
+                window_to_keep = window_handle
+            else:
+                driver.switch_to.window(window_handle)
+                driver.close()
+        driver.switch_to.window(window_to_keep)
     return driver
 
 
@@ -346,9 +317,8 @@ def access_page(driver: WebDriver, url: str) -> None:
 def switch_to_new_tab(driver: WebDriver, url: str) -> None:
     logging.debug("Opening new tab...")
     driver.execute_script(f"window.open('{url}', 'new tab')")
-    time.sleep(2)
     logging.debug("Closing original tab...")
-    time.sleep(2)
+    time.sleep(5)
 
 
 def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> ChallengeResolutionT:
@@ -419,7 +389,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
                 if attempt % 2 == 0:
                     switch_to_new_tab(driver, req.url)
                     driver = get_correct_window(driver)
-                    time.sleep(4)
+                    time.sleep(2)
 
                 # wait until the title changes
                 for title in CHALLENGE_TITLES:

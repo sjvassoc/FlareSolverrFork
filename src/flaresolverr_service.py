@@ -275,7 +275,7 @@ def click_verify(driver: WebDriver):
             actions = ActionChains(driver)
 
             # Move to the pivot element (simulates moving the mouse to the pivot element)
-            actions.move_to_element(pivot_element).pause(1).click().pause(1)
+            actions.move_to_element(pivot_element).pause(1).double_click().pause(2)
 
             # Move the mouse by the calculated offset (relative to the pivot element)
             actions.move_to_element_with_offset(pivot_element, offset_x, offset_y).pause(2)
@@ -317,8 +317,7 @@ def access_page(driver: WebDriver, url: str) -> None:
 def switch_to_new_tab(driver: WebDriver, url: str) -> None:
     logging.debug("Opening new tab...")
     driver.execute_script(f"window.open('{url}', 'new tab')")
-    logging.debug("Closing original tab...")
-    time.sleep(5)
+    time.sleep(15)
 
 
 def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> ChallengeResolutionT:
@@ -386,7 +385,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         while True:
             try:
                 attempt = attempt + 1
-                if attempt % 2 == 0:
+                if attempt % 4 == 0:
                     switch_to_new_tab(driver, req.url)
                     driver = get_correct_window(driver)
                     time.sleep(2)

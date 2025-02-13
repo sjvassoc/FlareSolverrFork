@@ -316,7 +316,7 @@ def access_page(driver: WebDriver, url: str) -> None:
 
 def switch_to_new_tab(driver: WebDriver, url: str) -> None:
     logging.debug("Opening new tab...")
-    driver.execute_script(f"window.open('{url}', 'new tab')")
+    driver.execute_script(f'window.open("{url}", "_blank");')
     time.sleep(15)
 
 

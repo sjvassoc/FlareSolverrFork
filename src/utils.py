@@ -12,7 +12,7 @@ import undetected_chromedriver as uc
 
 FLARESOLVERR_VERSION = None
 PLATFORM_VERSION = None
-CHROME_EXE_PATH = None
+CHROME_EXE_PATH = os.environ.get("CHROME_EXE_PATH", None)
 CHROME_MAJOR_VERSION = None
 USER_AGENT = None
 XVFB_DISPLAY = None
@@ -303,7 +303,7 @@ def extract_version_nt_folder() -> str:
             paths = [f.path for f in os.scandir(path) if f.is_dir()]
             for path in paths:
                 filename = os.path.basename(path)
-                pattern = '\d+\.\d+\.\d+\.\d+'
+                pattern = r'\d+\.\d+\.\d+\.\d+'
                 match = re.search(pattern, filename)
                 if match and match.group():
                     # Found a Chrome version.

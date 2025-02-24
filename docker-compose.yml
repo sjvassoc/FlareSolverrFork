@@ -3,13 +3,18 @@ version: "2.1"
 services:
   flaresolverr:
     # DockerHub mirror flaresolverr/flaresolverr:latest
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: alexfozor/flaresolverr:pr-1300-experimental
+    #    image: ghcr.io/flaresolverr/flaresolverr:latest
+    #    image: alexfozor/flaresolverr:pr-1300
     container_name: flaresolverr
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_HTML=${LOG_HTML:-false}
       - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
-      - TZ=Europe/London
+      - TZ=Europe/Paris
+      - DRIVER=nodriver # same with or without this line
+      - PGID=1000
+      - PUID=1000
     ports:
       - "${PORT:-8191}:8191"
     restart: unless-stopped

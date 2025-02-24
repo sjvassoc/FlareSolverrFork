@@ -87,10 +87,10 @@ This is the recommended way for Windows users.
 
 ### From source code (FreeBSD/TrueNAS CORE)
 
-* Run `pkg install chromium python311 py311-pip xorg-vfbserver` command to install the required dependencies.
+* Run `pkg install chromium python39 py39-pip xorg-vfbserver` command to install the required dependencies.
 * Clone this repository and open a shell in that path.
-* Run `python3.11 -m pip install -r requirements.txt` command to install FlareSolverr dependencies.
-* Run `python3.11 src/flaresolverr.py` command to start FlareSolverr.
+* Run `python3.9 -m pip install -r requirements.txt` command to install FlareSolverr dependencies.
+* Run `python3.9 src/flaresolverr.py` command to start FlareSolverr.
 
 ### Systemd service
 
@@ -185,9 +185,10 @@ session. When you no longer need to use a session you should make sure to close 
 | session             | Optional. Will send the request from and existing browser instance. If one is not sent it will create a temporary instance that will be destroyed immediately after the request is completed.                                                                                                                                                |
 | session_ttl_minutes | Optional. FlareSolverr will automatically rotate expired sessions based on the TTL provided in minutes.                                                                                                                                                                                                                                      |
 | maxTimeout          | Optional, default value 60000. Max timeout to solve the challenge in milliseconds.                                                                                                                                                                                                                                                           |
+| userAgent           | Optional. Used for the current request and does not affect subsequent ones.                                                                                                                                                                                                                                                                  |
 | cookies             | Optional. Will be used by the headless browser. Eg: `"cookies": [{"name": "cookie1", "value": "value1"}, {"name": "cookie2", "value": "value2"}]`.                                                                                                                                                                                           |
 | returnOnlyCookies   | Optional, default false. Only returns the cookies. Response data, headers and other parts of the response are removed.                                                                                                                                                                                                                       |
-| proxy               | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is not supported. (When the `session` parameter is set, the proxy is ignored; a session specific proxy can be set in `sessions.create`.) |
+| proxy               | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is supported. (When the `session` parameter is set, the proxy is ignored; a session specific proxy can be set in `sessions.create`.) |
 
 > **Warning**
 > If you want to use Cloudflare clearance cookie in your scripts, make sure you use the FlareSolverr User-Agent too. If they don't match you will see the challenge.
@@ -317,7 +318,7 @@ solve a captcha.
 If this is the case, FlareSolverr will return the error `Captcha detected but no automatic solver is configured.`
 
 FlareSolverr can be customized to solve the CAPTCHA automatically by setting the environment variable `CAPTCHA_SOLVER`
-to the file name of one of the adapters inside the `/captcha` directory.
+to the file name of one of the adapters inside the [/captcha](src/captcha) directory.
 
 ## Related projects
 

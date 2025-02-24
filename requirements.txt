@@ -1,4 +1,4 @@
-bottle==0.12.25
+bottle==0.13.2
 waitress==2.1.2
 DrissionPage==4.1.0.0b19
 func-timeout==4.3.5

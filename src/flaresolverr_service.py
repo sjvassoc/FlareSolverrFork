@@ -1,5 +1,6 @@
 import logging
 import platform
+import random
 import sys
 import time
 from datetime import timedelta
@@ -49,6 +50,7 @@ CHALLENGE_SELECTORS = [
     'div.vc div.text-box h2'
 ]
 SHORT_TIMEOUT = 1
+LONG_TIMEOUT = 5
 SESSIONS_STORAGE = SessionsStorage()
 
 
@@ -221,6 +223,21 @@ def _cmd_sessions_destroy(req: V1RequestBase) -> V1ResponseBase:
     })
 
 
+def _init_driver(driver):
+    try:
+        driver.execute_cdp_cmd('Page.enable', {})
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': """
+                Element.prototype._as = Element.prototype.attachShadow;
+                Element.prototype.attachShadow = function (params) {
+                    return this._as({mode: "open"})
+                };
+            """
+        })
+    except Exception as e:
+        logging.debug("Driver init exception: %s", repr(e))
+
+
 def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
     timeout = int(req.maxTimeout) / 1000
     driver = None
@@ -240,6 +257,7 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
         else:
             driver = utils.get_webdriver(req.proxy)
             logging.debug('New instance of webdriver has been created to perform the request')
+        _init_driver(driver)
         return func_timeout(timeout, _evil_logic, (req, driver, method))
     except FunctionTimedOut:
         raise Exception(f'Error solving the challenge. Timeout after {timeout} seconds.')
@@ -253,14 +271,89 @@ def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
             logging.debug('A used instance of webdriver has been destroyed')
 
 
-def click_verify(driver: WebDriver):
+def wait_for_element_by_css(driver, css_selector: str):
+    try:
+        element = WebDriverWait(driver, LONG_TIMEOUT).until(
+            presence_of_element_located((By.CSS_SELECTOR, css_selector)))
+        # element = driver.find_elements(By.CSS_SELECTOR, css_selector)  # Avoid expect to save time
+        return element
+    except:
+        logging.debug(f"Element with css selector: {css_selector}, not found!")
+        return None
+
+
+def get_shadowed_iframe(driver: WebDriver, css_selector: str):
+    logging.debug("Getting ShadowRoot by selector: %s", css_selector)
+    shadow_element = driver.execute_script("""
+        return document.querySelector(arguments[0]).shadowRoot.firstChild;
+    """, css_selector)
+    if shadow_element:
+        logging.debug("iframe found")
+    else:
+        logging.debug("iframe not found")
+    return shadow_element
+
+
+def move_mouse_randomly(driver):
+    actions = ActionChains(driver)
+
+    def perform_random_move(_driver, _actions):
+        # Get the size of the window
+        window_width = _driver.execute_script("return window.innerWidth")
+        window_height = _driver.execute_script("return window.innerHeight")
+
+        # Generate random positions within the window dimensions
+        random_x = random.randint(0, int(window_width / 4))
+        random_y = random.randint(0, int(window_height / 4))
+
+        # Move the mouse to the random position
+        _actions.move_by_offset(random_x, random_y).double_click().pause(random.uniform(0, 2))
+
+    # Simulate mouse moving randomly
+    for _ in range(2):  # Move the mouse 5 times randomly
+        perform_random_move(driver, actions)
+    actions.click_and_hold().pause(1).release().perform()
+
+
+def click_verify_direct(driver: WebDriver):
+    try:
+        logging.debug("Try to find the Cloudflare verify checkbox...")
+        iframe = get_shadowed_iframe(driver, "div:not(:has(div))")
+        driver.switch_to.frame(iframe)
+        iframe_body = wait_for_element_by_css(driver, "body")
+        if iframe_body:
+            iframe_body.click()
+            actions = ActionChains(driver)
+            actions.move_to_element_with_offset(iframe_body, 10, 10)
+            actions.context_click().pause(3).click()
+            actions.perform()
+            logging.debug("Attempted to click on iframe body")
+    except Exception as e:
+        logging.debug("Cloudflare verify checkbox not found on the page. %s", repr(e))
+    finally:
+        driver.switch_to.default_content()
+
+    try:
+        logging.debug("Try to find the Cloudflare 'Verify you are human' button...")
+        button = wait_for_element_by_css(driver, "input[type=checkbox]")
+        if button:
+            actions = ActionChains(driver)
+            actions.move_to_element_with_offset(button, 5, 7)
+            actions.click(button)
+            actions.perform()
+            logging.debug("The Cloudflare 'Verify you are human' button found and clicked!")
+    except Exception:
+        logging.debug("The Cloudflare 'Verify you are human' button not found on the page.")
+
+    time.sleep(2)
+
+
+def click_verify_with_actions(driver: WebDriver):
     try:
         logging.debug("Try to check the Cloudflare verify checkbox...")
 
         # Find the pivot element (in this case, the header)
-        pivot_element = driver.find_element(By.CSS_SELECTOR, "h1.zone-name-title.h1")
-
-        if pivot_element:
+        if pivot_element := driver.find_elements(By.CSS_SELECTOR, "h1.zone-name-title.h1"):
             # Get the position of the pivot element
             location = pivot_element.location
             logging.debug(f"Pivot element location {location}")
@@ -294,14 +387,14 @@ def click_verify(driver: WebDriver):
     time.sleep(2)
 
 
-def get_correct_window(driver: WebDriver) -> WebDriver:
+def get_correct_window(driver: WebDriver, url: str, close_other_tabs: bool = True) -> WebDriver:
     if len(driver.window_handles) > 1:
         window_to_keep = None
         for window_handle in reversed(driver.window_handles):
             current_url = driver.current_url
-            if not current_url.startswith("devtools://devtools") and not window_to_keep:
+            if current_url.startswith(url) and not window_to_keep:
                 window_to_keep = window_handle
-            else:
+            elif close_other_tabs:
                 driver.switch_to.window(window_handle)
                 driver.close()
         driver.switch_to.window(window_to_keep)
@@ -314,10 +407,14 @@ def access_page(driver: WebDriver, url: str) -> None:
     driver.start_session()  # required to bypass Cloudflare
 
 
-def switch_to_new_tab(driver: WebDriver, url: str) -> None:
+def switch_to_new_tab(driver: WebDriver, url: str):
     logging.debug("Opening new tab...")
-    driver.execute_script(f'window.open("{url}", "_blank");')
-    time.sleep(15)
+    driver.execute_script(f"window.open('{url}', 'new tab')")
+    driver.switch_to.window(driver.window_handles[-1])
+    _init_driver(driver)
+    time.sleep(1)
+    driver.get(url)
+    return driver
 
 
 def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> ChallengeResolutionT:
@@ -331,7 +428,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         _post_request(req, driver)
     else:
         access_page(driver, req.url)
-    driver = get_correct_window(driver)
+    driver = get_correct_window(driver, req.url)
 
     # set cookies if required
     if req.cookies is not None and len(req.cookies) > 0:
@@ -344,7 +441,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
             _post_request(req, driver)
         else:
             access_page(driver, req.url)
-        driver = get_correct_window(driver)
+        driver = get_correct_window(driver, req.url)
 
     # wait for the page
     if utils.get_config_log_html():
@@ -385,29 +482,34 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
         while True:
             try:
                 attempt = attempt + 1
-                if attempt % 4 == 0:
-                    switch_to_new_tab(driver, req.url)
-                    driver = get_correct_window(driver)
-                    time.sleep(2)
+                driver = get_correct_window(driver, req.url)
+                if attempt % 3 == 0:
+                    driver = switch_to_new_tab(driver, req.url)
+                    driver = get_correct_window(driver, req.url, False)
+                    time.sleep(5)
+                    # click_verify_direct(driver)
 
                 # wait until the title changes
                 for title in CHALLENGE_TITLES:
                     logging.debug("Waiting for title (attempt " + str(attempt) + "): " + title)
-                    WebDriverWait(driver, SHORT_TIMEOUT).until_not(title_is(title))
+                    WebDriverWait(driver, LONG_TIMEOUT).until_not(title_is(title))
 
                 # then wait until all the selectors disappear
                 for selector in CHALLENGE_SELECTORS:
                     logging.debug("Waiting for selector (attempt " + str(attempt) + "): " + selector)
-                    WebDriverWait(driver, SHORT_TIMEOUT).until_not(
+                    WebDriverWait(driver, LONG_TIMEOUT).until_not(
                         presence_of_element_located((By.CSS_SELECTOR, selector)))
-
                 # all elements not found
                 break
 
             except TimeoutException:
                 logging.debug("Timeout waiting for selector")
 
-                click_verify(driver)
+                # move_mouse_randomly(driver)
+                # if attempt < 4:
+                # click_verify_direct(driver)
+                # else:
+                click_verify_with_actions(driver)
 
                 # update the html (cloudflare reloads the page every 5 s)
                 html_element = driver.find_element(By.TAG_NAME, "html")

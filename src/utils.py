@@ -222,6 +222,8 @@ def get_webdriver(proxy: dict = None, user_data_path: str = None) -> ChromiumPag
     # https://github.com/microsoft/vscode/issues/127800#issuecomment-873342069
     # https://peter.sh/experiments/chromium-command-line-switches/#use-gl
     options.set_argument('--use-gl=swiftshader')
+    # prevent attempts to use host password manager (i.e. prevents KDE Wallet prompts)
+    options.set_argument('--password-store=basic')
 
     language = os.environ.get('LANG', None)
     if language is not None:

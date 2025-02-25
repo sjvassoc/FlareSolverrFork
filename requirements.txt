@@ -1,6 +1,5 @@
 bottle==0.13.2
-waitress==2.1.2
-DrissionPage==4.1.0.0b19
+waitress==3.0.1
 func-timeout==4.3.5
 prometheus-client==0.17.1
 # required by undetected_chromedriver
@@ -11,3 +10,14 @@ websockets==11.0.3
 xvfbwrapper==0.2.9; platform_system != "Windows"
 # only required for windows
 pefile==2023.2.7; platform_system == "Windows"
+lxml
+cssselect
+DownloadKit>=2.0.0
+websocket-client
+click
+tldextract
+psutil
+openpyxl>=3.1.5
+bottle==0.13.2
+waitress==3.0.1
+DrissionPage==4.1.0.17
